@@ -28,7 +28,7 @@ class AudioDataSet(Dataset):
 
 	def __getitem__(self, index):
 		sample_rate = 480000
-		resample_rate = sample_rate/10
+		resample_rate = int(sample_rate/5)
 		sep_waveform_list = []
 		mixed_data = torchaudio.load(config.project_dataset_input + self.mixed_audio_names[index])
 		mixed_waveform = mixed_data[0].reshape(1, -1)
@@ -37,8 +37,10 @@ class AudioDataSet(Dataset):
 			mixed_waveform_pad[0,:mixed_waveform.numel()] = mixed_waveform[0,:] 
 		else:
 			mixed_waveform_pad[:] = mixed_waveform[:]
-		mixed_waveform_pad = torchaudio.transforms.Resample(sample_rate, resample_rate)(mixed_waveform_pad[0,:].view(1,-1))
-		mixed_waveform = PreProcessData(mixed_waveform_pad)
+		#mixed_waveform_pad = torchaudio.transforms.Resample(sample_rate, resample_rate)(mixed_waveform_pad)
+		mixed_waveform_pad_formatted = torch.zeros([1, resample_rate])
+		mixed_waveform_pad_formatted[0,:resample_rate] = mixed_waveform_pad[0,:resample_rate] #take every 2nd sample of soundData
+		mixed_waveform = PreProcessData(mixed_waveform_pad_formatted)
 		for j in range(config.num_classes):
 			sep_data = torchaudio.load(config.project_dataset_output + self.sep_audio_names[j][index])
 			sep_waveform = sep_data[0].reshape(1, -1)
@@ -47,8 +49,10 @@ class AudioDataSet(Dataset):
 				sep_waveform_pad[0,:sep_waveform.numel()] = sep_waveform[0,:] 
 			else:
 				sep_waveform_pad[:] = sep_waveform[:]
-			sep_waveform_pad = torchaudio.transforms.Resample(sample_rate, resample_rate)(sep_waveform_pad[0,:].view(1,-1))
-			sep_waveform_list.append(PreProcessData(sep_waveform_pad))
+			#sep_waveform_pad = torchaudio.transforms.Resample(sample_rate, resample_rate)(sep_waveform_pad)
+			sep_waveform_pad_formatted = torch.zeros([1, resample_rate])
+			sep_waveform_pad_formatted[0,:resample_rate] = sep_waveform_pad[0,:resample_rate] #take every 2nd sample of soundData
+			sep_waveform_list.append(PreProcessData(sep_waveform_pad_formatted))
 
 		return (mixed_waveform, sep_waveform_list)
 
@@ -72,5 +76,5 @@ dataset_size = len(pd.read_csv(config.output_csv_with_audio_file_path))
 train_set = AudioDataSet(0, int(config.train_set_percent * dataset_size))
 dev_set = AudioDataSet(int(config.train_set_percent * dataset_size), dataset_size)
 
-train_loader = torch.utils.data.DataLoader(train_set, batch_size = config.batch_size, shuffle = False, **dataloader_kwargs)
-dev_loader = torch.utils.data.DataLoader(dev_set, batch_size = config.batch_size, shuffle = False, **dataloader_kwargs)
+#train_loader = torch.utils.data.DataLoader(train_set, batch_size = config.batch_size, shuffle = True, **dataloader_kwargs)
+#dev_loader = torch.utils.data.DataLoader(dev_set, batch_size = config.batch_size, shuffle = True, **dataloader_kwargs)

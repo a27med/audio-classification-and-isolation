@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+import os
+import mir_eval
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -88,14 +90,13 @@ class AutoEncoderModel(nn.Module):
 		decode_baby_cry = self.fcl_speech(shared_fc_out)
 		decode_baby_cry = self.deconv_baby_cry(decode_baby_cry)
 
-		decode_siren = self.fcl_speech(shared_fc_out)
-		decode_siren = self.deconv_siren(decode_siren)
-
 		decode_dog = self.fcl_speech(shared_fc_out)
 		decode_dog = self.deconv_dog(decode_dog)
 
+		decode_siren = self.fcl_speech(shared_fc_out)
+		decode_siren = self.deconv_siren(decode_siren)
+
 		concat_out = torch.cat((decode_speech, decode_baby_cry, decode_siren, decode_dog), 1)
-		concat_out = torch.cat((decode_baby_cry, decode_siren, decode_dog), 1)
 		concat_out = self.out_ReLU(concat_out)
 
 		return concat_out
@@ -106,11 +107,14 @@ def train(model):
 	loss_list = []
 
 	for epoch in range(config.num_epochs):
-		for batch_idx, (data, target) in enumerate(io_processing.train_loader):
-			model_out = model(data[0].permute(0, 3, 1, 2))
+		train_set_count = 0
+		for (data, target) in (io_processing.train_set):
+			data = torch.FloatTensor(data)
+			model_out = model(data.permute(0, 3, 1, 2))
 			
 			for i in range(len(target)):
-				target[i] = target[i][:, 0, :, :].permute(0, 3, 1, 2)
+				target[i] = torch.FloatTensor(target[i])
+				target[i] = target[i][:, :, :].permute(0, 3, 1, 2)
 			
 			concat_target = torch.cat((target[0], target[1], target[2]), 1)
 			
@@ -121,14 +125,58 @@ def train(model):
 			loss.backward()
 			optimizer.step()
 
-			if batch_idx % 10 == 0:
-				print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-					epoch, batch_idx * len(data), len(io_processing.train_loader.dataset),
-					100. * batch_idx / len(io_processing.train_loader), loss
+			if train_set_count % 1 == 0:
+				print('Train Epoch: {} \tLoss: {:.6f}'.format(
+					epoch, loss
 				))
+
+			if train_set_count % 4 == 0:
+				break
+
+			train_set_count += 1
+			
+	torch.save(model.state_dict(), config.log_final_state_folder + "auto_encoder_model_state.pt")
+	torch.save(model.state_dict(), config.log_complete_model_folder + "auto_encoder_model.pt")
+
+def eval(model):
+	model.eval()
+
+	sdr_list = []
+	isr_list = []
+	sir_list = []
+	sar_list = []
+
+	for (data, target) in (io_processing.dev_set):
+		model_out = model(data.permute(0, 3, 1, 2))
+
+		for i in range(len(target)):
+			target[i] = torch.FloatTensor(target[i])
+			target[i] = target[i][:, :, :].permute(0, 3, 1, 2)
+		
+		concat_target = torch.cat((target[0], target[1], target[2]), 1)
+
+		[sdr, isr, sir, sar, _] = mir_eval.separation.bss_eval_images(concat_target.numpy(), model_out.numpy())
+		
+		sdr_list.append(sdr)
+        isr_list.append(isr)
+        sir_list.append(sir)
+        sar_list.append(sar)
+
+def init_log():
+	if not os.path.isdir(config.log_folder):
+		os.mkdir(config.log_folder)
+	if not os.path.isdir(config.log_final_state_folder):
+		os.mkdir(config.log_final_state_folder)
+	if not os.path.isdir(config.log_indv_state_folder):
+		os.mkdir(config.log_indv_state_folder)
+	if not os.path.isdir(config.log_complete_model_folder):
+		os.mkdir(config.log_complete_model_folder)
+
+init_log()
 
 model = AutoEncoderModel()
 optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
 criterion = nn.MSELoss()
 
 train(model)
+eval(model)
