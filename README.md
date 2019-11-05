@@ -1,3 +1,5 @@
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://github.com/a27med/audio-classification-and-isolation/blob/master/LICENSE)
+
 # Audio Classification and Isolation: A Deep NeuralNetwork Approach
 
 >__This work is for the [CS230 Fall 2019 Project](https://cs230.stanford.edu/project/)__
